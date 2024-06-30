@@ -1,74 +1,133 @@
-version: '3.1'
+version: "3.5"
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    platform: linux/amd64
+    image: confluentinc/cp-zookeeper:6.1.0
+    hostname: zookeeper
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-    ports:
-      - "2181:2181"
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - cdc-network
+    volumes:
+      - cdc-zk-data:/var/lib/zookeeper/data:rw
+      - cdc-zk-logs:/var/lib/zookeeper/log:rw
 
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    platform: linux/amd64
-    container_name: kafka
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9092:9092"
+  broker:
+    image: confluentinc/cp-kafka:6.1.0
+    hostname: broker
+    container_name: broker
     depends_on:
       - zookeeper
-
-  mysql:
-    image: mysql:latest
-    container_name: mysql-container
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-    volumes:
-      - ./db_movies_neflix_transact.sql:/docker-entrypoint-initdb.d/db_movies_neflix_transact.sql
     ports:
-      - "3306:3306"
-
-  debezium:
-    image: debezium/connect:latest
-    platform: linux/amd64
-    container_name: debezium
+      - "9092:9092"
     environment:
-      BOOTSTRAP_SERVERS: kafka:9092
-      GROUP_ID: 1
-      CONFIG_STORAGE_TOPIC: debezium_config
-      OFFSET_STORAGE_TOPIC: debezium_offset
-      STATUS_STORAGE_TOPIC: debezium_status
-      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_REST_ADVERTISED_HOST_NAME: debezium
-      CONNECT_REST_PORT: 8083
-      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+    networks:
+      - cdc-network
+    volumes:
+      - cdc-broker-data:/var/lib/kafka/data:rw
+
+  connect:
+    image: confluentinc/cp-kafka-connect:6.1.0
+    hostname: connect
+    container_name: connect
+    depends_on:
+      - zookeeper
+      - broker
     ports:
       - "8083:8083"
-    depends_on:
-      - kafka
-      - mysql
-
-  akhq:
-    image: tchiotludo/akhq:latest
-    depends_on:
-      - kafka
-    ports:
-      - 8080:8080
     environment:
-      AKHQ_CONFIGURATION: |
-        akhq:
-          connections:
-            docker-kafka:
-              properties:
-                bootstrap.servers: "kafka:9092"
+      CONNECT_BOOTSTRAP_SERVERS: broker:29092
+      CONNECT_GROUP_ID: "connect"
+      CONNECT_REST_PORT: 8083
+      CONNECT_CONFIG_STORAGE_TOPIC: "connect-config"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+      CONNECT_OFFSET_STORAGE_TOPIC: "connect-offset"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_REST_ADVERTISED_HOST_NAME: "connect"
+      CONNECT_KEY_CONVERTER_SCHEMAS_EABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_PLUGIN_PATH: /usr/local/share/kafka/plugins
+    networks:
+      - cdc-network
+    volumes:
+      - ./plugins:/usr/local/share/kafka/plugins:ro
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:6.1.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - broker
+    networks:
+      - cdc-network
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "broker:29092"
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  mysql:
+    image: mysql:8.0.23
+    container_name: mysql
+    hostname: mysql
+    environment:
+      MYSQL_DATABASE: hospitaldb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: pass
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - 3306:3306
+    volumes:
+      - ./data:/docker-entrypoint-initdb.d:ro
+    networks:
+      - cdc-network
+    cap_add:
+      - SYS_NICE # CAP_SYS_NICE
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.4.0
+    container_name: elasticsearch
+    hostname: elasticsearch
+    environment:
+      - xpack.security.enabled=false
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK    
+    ports:
+      - 9200:9200  
+    networks:
+        - cdc-network    
+
+networks:
+  cdc-network:
+    name: cdc-network
+    driver: bridge
 
 volumes:
-  mysql_data:
+  cdc-broker-data:
+  cdc-zk-data:
+  cdc-zk-logs:

@@ -1,0 +1,17 @@
+{
+  "name": "mysql-src-connector",
+  "config": {
+      "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+      "database.hostname": "mysql",
+      "database.port": "3306",
+      "database.user": "debezium",
+      "database.password": "debezium",
+      "database.server.id": "1",
+      "database.server.name": "mysql",
+      "database.allowPublicKeyRetrieval": "true",
+      "database.include.list": "hospitaldb",
+      "table.whitelist": "hospitaldb.Patient",
+      "database.history.kafka.bootstrap.servers": "broker:29092",
+      "database.history.kafka.topic": "dbhistory.hospitaldb"
+  }
+}
