@@ -9,7 +9,7 @@
     "database.password": "root",
     "database.server.id": "184054",
     "database.server.name": "netflix",
-    "database.whitelist": "db_movies_netflix_transact",
+    "database.whitelist": "db_movies_neflix_transact",
     "database.history.kafka.bootstrap.servers": "kafka:9092",
     "database.history.kafka.topic": "schema-changes.netflix",
     "include.schema.changes": "true",
