@@ -1,0 +1,40 @@
+
+--eliminacion
+docker stop $(docker ps -aq)
+docker rm $(docker ps -aq)
+docker rmi $(docker images -q)
+docker volume rm $(docker volume ls -q)
+docker network rm $(docker network ls -q)
+
+--conectar a red
+docker network connect my_network zookeeper
+docker network connect my_network broker
+docker network connect my_network connect
+docker network connect my_network schema-registry
+docker network connect my_network elasticsearch
+docker network connect my_network mysql
+
+docker-compose up -d
+docker-compose down 
+
+--registrar conector json
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @mysql-src-connector.json
+curl -X POST -H "Content-Type: application/json" --data @elasticsearch-sink-connector.json http://localhost:8083/connectors
+
+curl -X DELETE http://localhost:8083/connectors/mysql-source-connector
+curl -X DELETE http://localhost:8083/connectors/elasticsearch-sink-connector
+curl -X POST http://localhost:8083/connectors/mysql-source-connector/restart
+
+
+
+-validar conectividad de los conectores
+curl http://localhost:8083/connector-plugins
+
+--mysql
+curl -s http://localhost:8083/connectors/mysql-source-connector/status | jq .
+
+--elastick
+curl -s http://localhost:8083/connectors/elasticsearch-sink-connector/status | jq .
+
+ 
+

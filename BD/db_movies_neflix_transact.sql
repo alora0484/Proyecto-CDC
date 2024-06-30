@@ -1,5 +1,5 @@
-CREATE DATABASE db_movies_netflix_transact;
-USE db_movies_netflix_transact;
+CREATE DATABASE neflixdb;
+USE neflixdb;
 
 
 /* CREAMOS LA TABLA Movie */

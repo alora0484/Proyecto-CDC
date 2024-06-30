@@ -1,4 +1,4 @@
-version: "3.5"
+version: "3.7"
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:6.1.0
@@ -62,13 +62,13 @@ services:
       CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_REST_ADVERTISED_HOST_NAME: "connect"
-      CONNECT_KEY_CONVERTER_SCHEMAS_EABLE: "false"
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_PLUGIN_PATH: /usr/local/share/kafka/plugins
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/local/share/kafka/plugins,/usr/local/share/my_plugins
     networks:
       - cdc-network
     volumes:
-      - ./plugins:/usr/local/share/kafka/plugins:ro
+      - ./my_plugins:/usr/local/share/my_plugins:ro
 
   schema-registry:
     image: confluentinc/cp-schema-registry:6.1.0
@@ -88,7 +88,7 @@ services:
     container_name: mysql
     hostname: mysql
     environment:
-      MYSQL_DATABASE: hospitaldb
+      MYSQL_DATABASE: neflixdb
       MYSQL_USER: user
       MYSQL_PASSWORD: pass
       MYSQL_ROOT_PASSWORD: rootpass
